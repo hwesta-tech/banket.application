@@ -12,6 +12,7 @@ import { buscaUrl } from '../../lib/busca/url';
 import {
   aprovarAssumir, aprovarRemocao, ehEquipe, listarPedidos, recusar, type StatusReivindicacao,
 } from '../../server/busca/reivindicacao';
+import { sincronizarPrivacidade } from '../../server/busca/privacidade';
 
 const user = Astro.locals.user;
 if (!ehEquipe(user?.email)) return new Response('Não encontrado', { status: 404 });
@@ -44,6 +45,8 @@ const FILTROS: { valor: StatusReivindicacao | 'todos'; rotulo: string }[] = [
   { valor: 'todos', rotulo: 'Todas' },
 ];
 const filtro = FILTROS.find((f) => f.valor === Astro.url.searchParams.get('status'))?.valor ?? 'pendente';
+// Reenvia ao Manager (Privacidade) remoções e desfechos que não chegaram; em segundo plano, não atrasa a página.
+void sincronizarPrivacidade();
 const pedidos = await listarPedidos(filtro);
 const ROTULO_STATUS: Record<StatusReivindicacao, string> = { pendente: 'Pendente', aprovada: 'Link enviado', concluida: 'Concluída', recusada: 'Recusada' };
 const fone = (d: string | null) => (d ? d.replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') : null);

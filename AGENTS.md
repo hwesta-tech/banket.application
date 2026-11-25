@@ -609,6 +609,7 @@ resposta, `ordem`, `nota`, `opcoes TEXT[]`, `texto`.
 | `032_busca` | tabelas do Banket Busca, extensões de geolocalização e texto, `eventos.origem` com `busca` |
 | `033_busca_cidades` | 5.571 municípios com centroide (fonte kelvins/municipios-brasileiros, dados do IBGE) |
 | `034_busca_sem_pacotes` | cadastro do perfil em 6 etapas (sem pacotes nem preço): recalcula `etapa_concluida` (6 = publicado) e `completude` com os pesos novos |
+| `054_busca_reivindicacao_privacidade` | `busca_reivindicacoes.privacidade_id` (pedido na Privacidade do Manager) e `privacidade_fechado_em` (desfecho informado) |
 | `052_padroes_cardapio_staff` | `aplicar_padroes_cardapio_staff` (seções do cardápio e staff de demonstração) em `aplicar_padroes_tenant_completo`; backfill nas empresas sem nenhum cadastro (fora as importadas sem dono) |
 | `051_eventos_verba_faixa` | `eventos.verba_faixa` + backfill a partir do snapshot das respostas do formulário |
 | `050_manager_ro` | leitura direta pelo Manager Hwesta: `acessos_dia` (acesso diário, gravado por `lib/acessos.ts` no middleware), schema `manager_ro` com as views de contrato (mesmas colunas do Yosp) e o papel `manager_reader` (NOLOGIN; senha fora do git). Mudou tabela usada por view? Mantenha a view (ver INTEGRACAO_HWESTA.md) |
@@ -1349,6 +1350,14 @@ transacionais usam `emailLayout` (título, parágrafos, botão, rodapé); os do 
   `concluida`; plano continua o Busca); **aprova remover** → `aprovarRemocao` grava `busca_exclusoes` e apaga o perfil,
   o espaço da unidade e a empresa se não sobrar unidade; ou **recusa** com o motivo (vai por e-mail a quem pediu).
 - `scripts/importar-busca.mjs` não traz de volta quem está em `busca_exclusoes` (place_id, e-mail ou telefone).
+- **Remoção = pedido de titular (LGPD)** (25/11/2026, `server/busca/privacidade.ts`): todo pedido de remover vai também
+  para a área **Privacidade** do Manager Hwesta como "Eliminação" (prazo de 15 dias, origem = página de reivindicação,
+  referência `banket-busca:reivindicacao:<id>`); a equipe continua decidindo aqui, e `aprovarRemocao`/`recusar` informam
+  o desfecho ao Manager (Atendido/Recusado com o texto). Best-effort: o que não chegou (`privacidade_id` nulo ou
+  decidido sem `privacidade_fechado_em`, migration 054) é reenviado ao abrir `/equipe/reivindicacoes`. Pedidos de
+  assumir não vão para o Manager. O pedido é só do **perfil público** (importado, sem usuário), nunca de uma conta de
+  cliente: vai com controlador Hwesta e sem `tenant_id`; buffet com conta despublica o perfil em `/busca`.
+  Contrato: seção 4.3 do PROTOCOLO.md do HCP.
 - Perfil importado (com linha em `busca_importacao`) **não é despublicado** pelo `recalcular` quando o dono salva uma
   etapa incompleta: segue na busca enquanto ele completa (a completude pesa no ranking). Se ele despublicar, as regras
   normais (etapas 1 a 5) valem para publicar de novo. E-mails de provedores gratuitos valem como canal de confirmação.

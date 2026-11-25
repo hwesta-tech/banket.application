@@ -4,6 +4,7 @@
 //   2. a equipe confere a posse pelos canais reais do perfil (e-mail, WhatsApp) em /equipe/reivindicacoes;
 //   3. aprovada a posse: assumir → link de criação do acesso no e-mail conferido (aprovarAssumir → assumirPerfil);
 //      remover → o perfil sai e a base não o traz de volta (aprovarRemocao, busca_exclusoes); ou recusa (recusar).
+// Remoção também é pedido de titular (LGPD): vai para a Privacidade do Manager Hwesta com o desfecho (privacidade.ts).
 // Conexão de sistema: quem pede não tem sessão nem empresa, e as tabelas cruzam empresas (como convites.ts).
 import { systemQuery, withLeituraPublica, withSystem, type Db } from '../../lib/db';
 import { permitir } from '../../lib/rateLimit';
@@ -15,6 +16,7 @@ import { invalidateTenant } from '../../lib/membership';
 import { invalidar as invalidarPlano } from '../../lib/planos/gating';
 import { buscaUrl } from '../../lib/busca/url';
 import { emailLayout } from '../emails';
+import { sincronizarPrivacidade } from './privacidade';
 import type { SessionUser } from '../../lib/auth';
 
 export type AcaoReivindicacao = 'assumir' | 'remover';
@@ -115,11 +117,13 @@ export async function registrarPedido(perfilRef: string, acao: AcaoReivindicacao
     [p.perfilId, email]
   );
   if (pendente.length) throw new UserError('Já recebemos o seu pedido para este buffet. A equipe responde em até 2 dias úteis.');
-  await systemQuery(
+  const { rows: novo } = await systemQuery<{ id: string }>(
     `INSERT INTO busca_reivindicacoes (perfil_id, tenant_id, buffet_nome, acao, nome, cargo, email, telefone, mensagem, ip)
-     VALUES ($1, $2, $3, $4, $5, $6, lower($7), $8, $9, $10)`,
+     VALUES ($1, $2, $3, $4, $5, $6, lower($7), $8, $9, $10) RETURNING id`,
     [p.perfilId, p.tenantId, p.nome, acao, dados.nome, dados.cargo, dados.email, dados.telefone, dados.mensagem, ip]
   );
+  // Remoção = pedido de titular (LGPD): vai para a Privacidade do Manager Hwesta, em segundo plano
+  if (acao === 'remover') void sincronizarPrivacidade(novo[0].id);
   const equipe = (process.env.BANKET_EQUIPE_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
   const oQue = acao === 'assumir' ? 'assumir o perfil' : 'remover o perfil';
   const aviso = emailLayout({
@@ -284,6 +288,7 @@ export async function aprovarRemocao(id: string, observacao: string | null, equi
     ],
   });
   await sendMail({ to: pedido.email, subject: `${pedido.buffet_nome} foi removido do Banket Busca`, html, text });
+  void sincronizarPrivacidade(id); // desfecho na Privacidade do Manager
 }
 
 /** A posse não se confirmou: encerra o pedido e responde a quem pediu com o motivo. */
@@ -309,6 +314,7 @@ export async function recusar(id: string, motivo: string, equipeId: string): Pro
     ],
   });
   await sendMail({ to: r.email, subject: `Seu pedido sobre o ${r.buffet_nome} no Banket Busca`, html, text });
+  if (r.acao === 'remover') void sincronizarPrivacidade(id); // desfecho na Privacidade do Manager
 }
 
 // ---------------------------------------------------------------------------
