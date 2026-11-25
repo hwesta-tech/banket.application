@@ -25,6 +25,20 @@ test.describe('Banket Busca: vitrine', () => {
     expect(JSON.parse(ld!)['@type']).toBe('WebSite');
   });
 
+  test('reivindicação: busca só sem buffet escolhido; "Trocar buffet" traz a busca de volta', async ({ page }) => {
+    // Acesso direto: sem buffet escolhido, a busca aparece
+    await page.goto(`${V}/para-buffets/reivindicar`);
+    await expect(page.getByRole('search', { name: 'Buscar o seu buffet' })).toBeVisible();
+    // Vindo do perfil: o buffet já está selecionado e a busca some
+    await page.goto(`${V}/para-buffets/reivindicar/${slugDe('buffet-sabor-de-festa')}`);
+    await expect(page.locator('.rv-buffet-cabeca')).toContainText('Sabor de Festa');
+    await expect(page.getByRole('search', { name: 'Buscar o seu buffet' })).toHaveCount(0);
+    // Tirando a seleção, a busca volta
+    await page.getByRole('link', { name: /Trocar buffet/ }).click();
+    await expect(page.getByRole('search', { name: 'Buscar o seu buffet' })).toBeVisible();
+    await expect(page.locator('.rv-buffet-cabeca')).toHaveCount(0);
+  });
+
   test('busca: clientes Banket primeiro, selo e disponibilidade só para cliente', async ({ page }) => {
     const data = psql(`SELECT to_char(current_date + 3, 'YYYY-MM-DD')`);
     await page.goto(`${V}/buscar?tipo=aniversario&cidade=santo-andre-sp&data=${data}`);

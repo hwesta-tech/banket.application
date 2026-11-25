@@ -82,10 +82,14 @@ const BENEFICIOS = [
       completas e receber pedidos de orçamento. Se preferir não aparecer, você também pode pedir a remoção.
     </p>
 
-    <form class="rv-busca" method="get" action={aqui} role="search" aria-label="Buscar o seu buffet">
-      <CampoNome id="rv-nome" valor={termo || null} rotulo="Encontre o seu buffet" placeholder="Digite o nome do buffet" destino={`${aqui}/`} />
-      <button type="submit" class="btn btn-secondary btn-large"><Icon name="search" size={16} /> Buscar</button>
-    </form>
+    {/* Busca só sem buffet escolhido (acesso direto à página). Vindo do perfil, ou depois de escolher, o buffet já está
+        selecionado e a busca some; "Trocar buffet" volta para cá sem seleção e ela reaparece. */}
+    {!perfil && (
+      <form class="rv-busca" method="get" action={aqui} role="search" aria-label="Buscar o seu buffet">
+        <CampoNome id="rv-nome" valor={termo || null} rotulo="Encontre o seu buffet" placeholder="Digite o nome do buffet" destino={`${aqui}/`} />
+        <button type="submit" class="btn btn-secondary btn-large"><Icon name="search" size={16} /> Buscar</button>
+      </form>
+    )}
 
     {!perfil && termo.length >= 2 && (
       resultados.length ? (
@@ -109,7 +113,14 @@ const BENEFICIOS = [
             <strong>{perfil.nome}</strong>
             {local && <span>{local}</span>}
           </div>
-          <a class="btn btn-text btn-sm" href={v(`/buffet/${perfil.slug}`)}>Ver perfil</a>
+          <div class="rv-buffet-acoes">
+            <a class="btn btn-text btn-sm" href={v(`/buffet/${perfil.slug}`)}>Ver perfil</a>
+            {!enviado && (
+              <a class="btn btn-text btn-sm" href={aqui} aria-label={`Trocar buffet: remover ${perfil.nome} da seleção e buscar outro`}>
+                <Icon name="x" size={16} /> Trocar buffet
+              </a>
+            )}
+          </div>
         </div>
 
         {enviado ? (
@@ -285,6 +296,25 @@ const BENEFICIOS = [
     display: flex;
     flex-direction: column;
     min-width: 0;
+  }
+
+  /* Ações numa linha própria abaixo do nome: "Ver perfil" no canto esquerdo (alinhado ao nome: 40px do ícone + 12px)
+     e "Trocar buffet" no canto direito. */
+  .rv-buffet-cabeca {
+    flex-wrap: wrap;
+  }
+
+  .rv-buffet-cabeca > .rv-buffet-acoes {
+    flex: 1 0 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding-left: 52px;
+  }
+
+  .rv-buffet-acoes .btn {
+    padding-inline: 0;
   }
 
   .rv-buffet-cabeca strong {
