@@ -304,9 +304,24 @@ function opcoesRanking(): OpcoesRanking {
   return { pesos: lerPesos(env('BUSCA_RANKING_PESOS')), regras: lerRegras(env('BUSCA_RANKING_REGRAS')) };
 }
 
-/** Destaques da home: os mais bem colocados no ranking geral (mesmas regras da busca, rodízio do dia). */
+/**
+ * "Buffets em destaque" da home escolhidos pela equipe (ids de busca_perfis), na ordem exibida. Perfis que saírem do ar
+ * (despublicados ou suspensos) somem sozinhos; sem nenhum visível, a home volta ao ranking automático.
+ */
+export const DESTAQUES_FIXOS: readonly string[] = [
+  '9edbeba4-5f7d-4c4a-9b27-abc691a2cfc6', // ESPAÇO MELVALEN · São Paulo
+  'c95667e3-987c-4971-925d-0b85fc5bbb81', // Buffet Dois Amores Angela · Curitiba
+  'd3b688c8-06de-4e3d-94cb-2754305bf1ce', // Casa de festas Maison garden · Rio de Janeiro
+];
+
+/** Destaques da home: a lista fixa (DESTAQUES_FIXOS) ou, sem ela, os mais bem colocados no ranking geral (rodízio do dia). */
 export async function destaques(limite = 6): Promise<ItemResultado[]> {
   return leituraPublica(async (db) => {
+    if (DESTAQUES_FIXOS.length) {
+      const fixos = new Map((await candidatos(db, { tipo: null, data: null, nome: null }, null, [...DESTAQUES_FIXOS])).map((c) => [c.id, c]));
+      const lista = DESTAQUES_FIXOS.flatMap((id) => fixos.get(id) ?? []).slice(0, limite);
+      if (lista.length) return lista.map((c) => ({ ...c, destaque: false }));
+    }
     const lista = await candidatos(db, { tipo: null, data: null, nome: null }, null);
     return ordenar(lista.filter((c) => c.foto), 'relevancia', { ...opcoesRanking(), semente: sementeDoDia(null, null) })
       .slice(0, limite).map((c) => ({ ...c, destaque: false }));
