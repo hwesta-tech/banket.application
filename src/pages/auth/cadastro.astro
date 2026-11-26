@@ -48,16 +48,22 @@ if (Astro.request.method === 'POST') {
     <Input id="senha" name="senha" type="password" label="Senha" autocomplete="new-password" minlength="8" required />
     <Input id="confirma_senha" name="confirma_senha" type="password" label="Confirme sua senha" autocomplete="new-password" required />
     <p class="auth-hint">{REGRA_SENHA}</p>
-    <Checkbox id="termos" name="termos" required>
+    <Checkbox id="termos" name="termos" required mensagemObrigatorio="Para continuar, aceite os Termos de uso e a Política de privacidade.">
       Li e aceito os <a href="/termos" target="_blank" rel="noopener" class="link">Termos de uso</a> e a{' '}
       <a href="/privacidade" target="_blank" rel="noopener" class="link">Política de privacidade</a>
     </Checkbox>
 
     <Button variant="primary" size="large" type="submit">Criar conta</Button>
     {comGoogle && (
-      <Button variant="secondary" size="large" href="/auth/google" icon="brand-google">
-        Continuar com o Google
-      </Button>
+      <>
+        <Button variant="secondary" size="large" href="/auth/google" icon="brand-google">
+          Continuar com o Google
+        </Button>
+        <p class="auth-aceite-google">
+          Ao continuar com o Google, você aceita os <a href="/termos" target="_blank" rel="noopener" class="link">Termos de uso</a> e a{' '}
+          <a href="/privacidade" target="_blank" rel="noopener" class="link">Política de privacidade</a>.
+        </p>
+      </>
     )}
   </form>
 
@@ -66,3 +72,13 @@ if (Astro.request.method === 'POST') {
     <span class="auth-nota">*Dados obrigatórios</span>
   </div>
 </AuthLayout>
+
+<style>
+  .auth-aceite-google {
+    margin: var(--space-2) 0 0;
+    font-size: var(--fs-12);
+    line-height: 1.5;
+    color: var(--text-muted);
+    text-align: center;
+  }
+</style>

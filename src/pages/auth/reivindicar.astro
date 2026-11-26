@@ -63,7 +63,7 @@ const local = r ? [r.bairro, r.cidade].filter(Boolean).join(', ') : '';
           <>
             <Input id="confirma_senha" name="confirma_senha" type="password" label="Confirme a senha" autocomplete="new-password" required />
             <p class="auth-hint">{REGRA_SENHA}</p>
-            <Checkbox id="termos" name="termos" required>
+            <Checkbox id="termos" name="termos" required mensagemObrigatorio="Para continuar, aceite os Termos de uso e a Política de privacidade.">
               Li e aceito os <a href="/termos" target="_blank" rel="noopener" class="link">Termos de uso</a> e a{' '}
               <a href="/privacidade" target="_blank" rel="noopener" class="link">Política de privacidade</a>
             </Checkbox>

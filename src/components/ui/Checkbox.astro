@@ -8,9 +8,20 @@ interface Props {
   checked?: boolean;
   required?: boolean;
   type?: 'checkbox' | 'toggle';
+  /** Aviso mostrado junto da caixa quando um checkbox obrigatório não foi marcado no envio */
+  mensagemObrigatorio?: string;
 }
 
-const { id, name, label = '', checked = false, required = false, type = 'checkbox' } = Astro.props;
+const {
+  id,
+  name,
+  label = '',
+  checked = false,
+  required = false,
+  type = 'checkbox',
+  mensagemObrigatorio = 'Marque esta opção para continuar.',
+} = Astro.props;
+const idErro = `${id}-erro`;
 ---
 
 <div class={`checkbox-group type-${type}`}>
@@ -22,7 +33,16 @@ const { id, name, label = '', checked = false, required = false, type = 'checkbo
       </div>
     ) : (
       <div class="checkbox-wrapper">
-        <input type="checkbox" id={id} name={name} class="checkbox-input" checked={checked} required={required} />
+        <input
+          type="checkbox"
+          id={id}
+          name={name}
+          class="checkbox-input"
+          checked={checked}
+          required={required}
+          data-mensagem-obrigatorio={required ? mensagemObrigatorio : undefined}
+          aria-describedby={required ? idErro : undefined}
+        />
         <div class="checkbox-box">
           <Icon name="check" size={13} stroke={2.5} class="checkmark" />
         </div>
@@ -30,7 +50,37 @@ const { id, name, label = '', checked = false, required = false, type = 'checkbo
     )}
     <span class="label-text">{Astro.slots.has('default') ? <slot /> : label}</span>
   </label>
+  {required && type === 'checkbox' && <p class="field-erro checkbox-erro" id={idErro} role="alert" hidden></p>}
 </div>
+
+<script>
+  // O input real é visualmente oculto, então o navegador bloqueia o envio sem mostrar o balão de validação.
+  // O aviso aparece junto da caixa desenhada e some ao marcar.
+  document.addEventListener(
+    'invalid',
+    (e) => {
+      const campo = e.target;
+      if (!(campo instanceof HTMLInputElement) || !campo.classList.contains('checkbox-input')) return;
+      const erro = campo.closest('.checkbox-group')?.querySelector<HTMLElement>('.checkbox-erro');
+      if (!erro) return;
+      e.preventDefault();
+      erro.textContent = campo.dataset.mensagemObrigatorio || 'Marque esta opção para continuar.';
+      erro.hidden = false;
+      campo.setAttribute('aria-invalid', 'true');
+      // Só o primeiro campo inválido do formulário recebe o foco
+      const primeiro = campo.form?.querySelector(':invalid');
+      if (primeiro === campo) campo.focus();
+    },
+    true
+  );
+  document.addEventListener('change', (e) => {
+    const campo = e.target;
+    if (!(campo instanceof HTMLInputElement) || !campo.classList.contains('checkbox-input') || !campo.checked) return;
+    const erro = campo.closest('.checkbox-group')?.querySelector<HTMLElement>('.checkbox-erro');
+    if (erro) erro.hidden = true;
+    campo.removeAttribute('aria-invalid');
+  });
+</script>
 
 <style>
   .checkbox-group {
@@ -54,12 +104,23 @@ const { id, name, label = '', checked = false, required = false, type = 'checkbo
     color: var(--text-body);
   }
 
+  /* 1px (não 0): o campo continua focável e participa da validação do formulário */
   .checkbox-input {
     position: absolute;
+    inset: 0;
+    margin: 0;
     opacity: 0;
     cursor: pointer;
-    height: 0;
-    width: 0;
+    width: 1px;
+    height: 1px;
+  }
+
+  .checkbox-input[aria-invalid='true'] ~ .checkbox-box {
+    border-color: var(--danger);
+  }
+
+  .checkbox-erro {
+    margin-top: var(--space-1-5);
   }
 
   .checkbox-wrapper {

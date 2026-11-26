@@ -568,7 +568,7 @@ resposta, `ordem`, `nota`, `opcoes TEXT[]`, `texto`.
 | `aplicar_padroes_financeiro(id)` | categorias iniciais de contas a receber e a pagar |
 | `aplicar_padroes_pesquisa(id)` | `pesquisa_config` (textos e e-mail) + questionário inicial (NPS, CSAT, escolhas, abertas) |
 | `fn_tenant_entitlements(id)` | **fonte única do plano**: `{sem_plano, plano_slug, gratuito, trial, trial_vencido, trial_usado, recursos, override}` (SECURITY DEFINER, datas em São Paulo); atalhos `fn_tenant_pode(id, recurso)` e `fn_tenant_limite(id, recurso)` |
-| `aplicar_padroes_cardapio_staff(id)` | 8 seções do cardápio (Entradas … Coffee Break) e 4 serviços de staff de demonstração com cachê zerado (Garçom 1/15 mín. 2, Chefe de salão por evento, Auxiliar de cozinha 1/30, Barman 1/80); só quando a empresa não tem nenhum (migration 052) |
+| `aplicar_padroes_cardapio_staff(id)` | 8 seções do cardápio (Entradas, Prato Principal, Acompanhamentos, Saladas, Sobremesas, Bebidas não alcoólicas, Bebidas alcoólicas, Coffee Break) e 9 serviços de staff de exemplo com cachê zerado (Garçom 1/15 mín. 2, Chefe de salão por evento, Recepcionista 1/100, Barman 1/80, Sommelier por evento, Chef de cozinha por evento, Auxiliar de cozinha 1/30, Churrasqueiro 1/50, Auxiliar de limpeza 1/100; Barman, Sommelier e Churrasqueiro fora do padrão do orçamento); só quando a empresa não tem nenhum (migrations 052 e 055). É a referência de uso de toda conta nova |
 | `aplicar_padroes_tenant_completo(id)` | chama as oito acima; usado no cadastro de empresa nova e na reivindicação do Busca |
 
 ### Histórico das migrations
@@ -609,6 +609,8 @@ resposta, `ordem`, `nota`, `opcoes TEXT[]`, `texto`.
 | `032_busca` | tabelas do Banket Busca, extensões de geolocalização e texto, `eventos.origem` com `busca` |
 | `033_busca_cidades` | 5.571 municípios com centroide (fonte kelvins/municipios-brasileiros, dados do IBGE) |
 | `034_busca_sem_pacotes` | cadastro do perfil em 6 etapas (sem pacotes nem preço): recalcula `etapa_concluida` (6 = publicado) e `completude` com os pesos novos |
+| `056_busca_reivindicacao_conversao` | `busca_reivindicacoes.crm_card_id`/`crm_card_url` (card do pedido de assumir no Board de Conversão do Manager) |
+| `055_padroes_staff_completo` | `aplicar_padroes_cardapio_staff` com os 9 serviços de staff (contas novas; sem backfill) |
 | `054_busca_reivindicacao_privacidade` | `busca_reivindicacoes.privacidade_id` (pedido na Privacidade do Manager) e `privacidade_fechado_em` (desfecho informado) |
 | `052_padroes_cardapio_staff` | `aplicar_padroes_cardapio_staff` (seções do cardápio e staff de demonstração) em `aplicar_padroes_tenant_completo`; backfill nas empresas sem nenhum cadastro (fora as importadas sem dono) |
 | `051_eventos_verba_faixa` | `eventos.verba_faixa` + backfill a partir do snapshot das respostas do formulário |
@@ -997,6 +999,8 @@ evento"); Ctrl/Cmd+clique segue o link. Mostra também as reuniões agendadas (`
   experiência, detalhes finais; fluxos `todos | B2B | B2C`; perguntas condicionais `mostrarSe`; perguntas "travadas").
   No banco só ficam os ajustes (`config`): seções/perguntas ativas, obrigatoriedade, ordem e perguntas personalizadas.
 - Editor Preact (`FormularioEditor`) via `/api/formularios/:id` (GET, PUT, DELETE, POST duplica — a cópia nasce inativa).
+  Toda edição abre **logo abaixo da pergunta editada** (backlog de 26/11/2026): "Editar" de pergunta personalizada e
+  "Editar opções"; só uma por vez (as demais ações esperam); "Adicionar pergunta" abre no fim da seção.
 - **Ocasião** (`b2b_ocasiao`, `b2c_ocasiao`, `origemOpcoes: 'ocasioes'`): as opções vêm do banco
   (`ocasioesPorFluxo` em `server/formularios.ts`): ocasiões ligadas a Corporativo no fluxo B2B e a Social no B2C, pela
   matriz de Configurações › Ocasiões. O valor é o id da ocasião. Sem nenhuma ocasião ligada ao tipo, a pergunta não
@@ -1023,7 +1027,7 @@ evento"); Ctrl/Cmd+clique segue o link. Mostra também as reuniões agendadas (`
   `endereco: true`) só aparece no local externo: CEP com máscara consultado na ViaCEP (`buscarCep`, `lib/endereco.ts`) que
   abre os campos rua, número, complemento, bairro, cidade e UF já preenchidos ("Não sei o CEP" abre vazios); a resposta é
   o texto de `enderecoCompleto` e vai para `eventos.endereco`; as faixas de budget têm `opcoesEditaveis` ("Editar opções"
-  abre o painel lateral `OpcoesDrawer`: grupo Opções com o X de cada uma e o campo para adicionar no fim; o valor gravado
+  abre `OpcoesEditor` logo abaixo da pergunta: grupo Opções com o X de cada uma e o campo para adicionar no fim; o valor gravado
   é o rótulo, em `config.secoes[].perguntas[].opcoes`) e a faixa respondida vai para `eventos.verba_faixa`; o corporativo também pergunta
   staff de terceiros e restrições (`b2b_staff`, `b2b_restricoes`); "Bebidas e bar" é múltipla escolha; sem a opção "3
   orçamentos comparativos"; WhatsApp/telefone exigem DDD (`telefoneValido`, `lib/mascaras.ts`, no servidor e ao sair do
@@ -1113,6 +1117,9 @@ transacionais usam `emailLayout` (título, parágrafos, botão, rodapé); os do 
 - **`lib/ui.ts`** (navegador): `toast(msg, tipo, {acao})`, `confirmar({titulo, texto, confirmar, perigo})`,
   `emCarregamento(botao, rotulo)`, `baixarArquivo(url)`. Nunca use `window.confirm`/`window.banketToast` direto.
 - **Toast**: erro fica até fechar (`role="alert"`); sucesso some em 5 s; ação opcional (ex.: Desfazer). Todo toast de erro passa por `mensagemAmigavel` (`lib/ui.ts`): "Failed to fetch", JSON inválido e erros HTTP viram texto para o usuário.
+- **Checkbox obrigatório** (`components/ui/Checkbox.astro`): o input real é invisível, então o navegador não mostra o
+  balão; o componente mostra `mensagemObrigatorio` junto da caixa (`#<id>-erro`, borda `--danger`) e some ao marcar.
+  No cadastro, abaixo de "Continuar com o Google", o texto de aceite dos Termos e da Política.
 - **Validação nativa em português** (`components/ui/ValidacaoNativa.astro` + `lib/validacao.ts`, nos layouts App, Auth e Formulário): `required`, e-mail, limites e tamanho com mensagem em pt-BR em qualquer idioma do navegador; `setCustomValidity` próprio de um campo prevalece.
 - **Confirmar** (`components/ui/Confirmar.astro`, `<dialog>`): também via `data-confirm="Pergunta?"`
   (+ `data-confirm-texto`, `data-confirm-rotulo`); verbos Excluir/Remover/Cancelar/Descartar deixam o botão vermelho.
@@ -1354,10 +1361,17 @@ transacionais usam `emailLayout` (título, parágrafos, botão, rodapé); os do 
   para a área **Privacidade** do Manager Hwesta como "Eliminação" (prazo de 15 dias, origem = página de reivindicação,
   referência `banket-busca:reivindicacao:<id>`); a equipe continua decidindo aqui, e `aprovarRemocao`/`recusar` informam
   o desfecho ao Manager (Atendido/Recusado com o texto). Best-effort: o que não chegou (`privacidade_id` nulo ou
-  decidido sem `privacidade_fechado_em`, migration 054) é reenviado ao abrir `/equipe/reivindicacoes`. Pedidos de
-  assumir não vão para o Manager. O pedido é só do **perfil público** (importado, sem usuário), nunca de uma conta de
+  decidido sem `privacidade_fechado_em`, migration 054) é reenviado ao abrir `/equipe/reivindicacoes`. O pedido é só do **perfil público** (importado, sem usuário), nunca de uma conta de
   cliente: vai com controlador Hwesta e sem `tenant_id`; buffet com conta despublica o perfil em `/busca`.
   Contrato: seção 4.3 do PROTOCOLO.md do HCP.
+- **Assumir = lead no Board de Conversão do Manager** (26/11/2026, `server/busca/conversao.ts`): todo pedido de assumir
+  vira card em "Novo Lead" no funil **Conversão** do Board do Banket no Manager Hwesta (`POST /api/public/crm/leads`,
+  referência `banket-busca:reivindicacao:<id>`, com os canais reais do perfil no texto para a conferência). A equipe
+  confere em "Em contato" e move para **Ganho**: o Manager chama `POST /api/hwesta/v1/profile-claims/approve`, que roda
+  `aprovarAssumir` (link de criação do acesso ao e-mail do card, plano Busca). **Perdido** não muda nada no Banket (o
+  pedido fica pendente). Com `HWESTA_MANAGER_URL`/`HWESTA_APP_KEY` configurados, `/equipe/reivindicacoes` só mostra os
+  pedidos de assumir com o link do card (aprovar/recusar ficam no Manager). Best-effort: o que não chegou
+  (`crm_card_id` nulo, migration 056) é reenviado ao abrir a fila. Contrato: seção 4.4 do PROTOCOLO.md do HCP.
 - Perfil importado (com linha em `busca_importacao`) **não é despublicado** pelo `recalcular` quando o dono salva uma
   etapa incompleta: segue na busca enquanto ele completa (a completude pesa no ranking). Se ele despublicar, as regras
   normais (etapas 1 a 5) valem para publicar de novo. E-mails de provedores gratuitos valem como canal de confirmação.

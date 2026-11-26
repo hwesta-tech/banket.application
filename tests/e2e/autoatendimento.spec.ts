@@ -44,6 +44,20 @@ test.describe.serial('Cadastro self-service', () => {
     psql(`DELETE FROM usuarios WHERE id = '${uid}'`);
   });
 
+  test('sem aceitar os termos, o cadastro mostra o aviso junto da caixa', async ({ page }) => {
+    await page.goto('/auth/cadastro');
+    await page.getByLabel('Nome e sobrenome').fill('Teste Termos');
+    await page.getByLabel('E-mail').fill(email);
+    await page.locator('#senha').fill(SENHA);
+    await page.getByLabel('Confirme sua senha').fill(SENHA);
+    await page.getByRole('button', { name: 'Criar conta' }).click();
+    const aviso = page.locator('#termos-erro');
+    await expect(aviso).toHaveText('Para continuar, aceite os Termos de uso e a Política de privacidade.');
+    await expect(page).toHaveURL(/\/auth\/cadastro/);
+    await page.locator('label[for=termos] .checkbox-wrapper').click();
+    await expect(aviso).toBeHidden();
+  });
+
   test('cria conta, confirma o e-mail e cadastra a empresa com os padrões', async ({ page }) => {
     await page.goto('/auth/cadastro');
     await page.getByLabel('Nome e sobrenome').fill('Teste Autoatendimento');
@@ -115,6 +129,15 @@ test.describe.serial('Cadastro self-service', () => {
     await expect(page.locator('main')).toContainText('Novo');
     await page.goto('/templates');
     await expect(page.locator('main')).toContainText('Template padrão');
+    // Seções do cardápio e serviços de staff de referência (migrations 052 e 055)
+    await page.goto('/cardapio/secoes');
+    for (const secao of ['Entradas', 'Prato Principal', 'Acompanhamentos', 'Saladas', 'Sobremesas', 'Bebidas não alcoólicas', 'Bebidas alcoólicas', 'Coffee Break']) {
+      await expect(page.locator('main')).toContainText(secao);
+    }
+    await page.goto('/staff/servicos');
+    for (const funcao of ['Garçom', 'Chefe de salão', 'Recepcionista', 'Barman', 'Sommelier', 'Chef de cozinha', 'Auxiliar de cozinha', 'Churrasqueiro', 'Auxiliar de limpeza']) {
+      await expect(page.locator('main')).toContainText(funcao);
+    }
     await page.goto('/configuracoes/empresa');
     await expect(page.locator('input[name=nome]')).toHaveValue('Buffet E2E');
   });

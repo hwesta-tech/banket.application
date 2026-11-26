@@ -343,6 +343,12 @@
   font-size: var(--fs-13);
 }
 
+/* Com outra edição aberta, as ações das demais perguntas esperam */
+.fe-acoes .row-action:disabled {
+  color: var(--text-placeholder);
+  cursor: not-allowed;
+}
+
 /* "Obrigatória": caixa de seleção pequena do design system */
 .fe-obrigatoria {
   display: inline-flex;
@@ -489,56 +495,28 @@
   gap: var(--space-2);
 }
 
-/* ---------- Painel de opções (faixas de budget): mesmo visual do Drawer.astro ---------- */
-.fe-drawer-fundo {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  justify-content: flex-end;
-  background: var(--bg-overlay);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  animation: fe-fade var(--dur-base) var(--ease-out);
+/* ---------- Edição em linha: abre logo abaixo da pergunta editada ---------- */
+.fe-pergunta.fe-em-edicao,
+.fe-pergunta.fe-em-edicao:hover {
+  background: var(--bg-accent-subtle);
+  border-bottom-color: transparent;
 }
 
-.fe-drawer {
-  width: var(--drawer-width);
-  max-width: 100%;
-  height: 100%;
-  background: var(--bg-surface);
-  box-shadow: var(--shadow-xl);
+.fe-edicao {
+  border-bottom: 1px solid var(--border-subtle);
+  scroll-margin: var(--space-6) 0 calc(var(--space-16) + var(--space-8));
+}
+
+.fe-edicao .fe-rascunho {
+  border-left: 3px solid var(--border-accent);
+}
+
+.fe-opcoes-editor {
   display: flex;
   flex-direction: column;
-  animation: fe-slide var(--dur-slow) var(--ease-out);
+  gap: var(--space-4);
 }
 
-.fe-drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-height: var(--header-height);
-  padding: 0 var(--space-4) 0 var(--space-6);
-  border-bottom: 1px solid var(--border-default);
-  flex: none;
-}
-
-.fe-drawer-titulo {
-  margin: 0;
-  font-size: var(--fs-18);
-  font-weight: var(--fw-medium);
-  letter-spacing: var(--ls-snug);
-  color: var(--text-strong);
-}
-
-.fe-drawer-acoes {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.fe-drawer-fechar,
 .fe-opcao-remover {
   display: inline-flex;
   align-items: center;
@@ -548,28 +526,8 @@
   border: none;
   border-radius: var(--radius-md);
   background: none;
-  color: var(--text-secondary);
   cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
-}
-
-.fe-drawer-fechar {
-  width: var(--control-h-md);
-  height: var(--control-h-md);
-}
-
-.fe-drawer-fechar:hover {
-  background: var(--action-ghost-hover);
-  color: var(--text-strong);
-}
-
-.fe-drawer-corpo {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
 }
 
 .fe-opcoes-pergunta {
@@ -580,7 +538,7 @@
 }
 
 .fe-opcoes-ajuda {
-  margin: calc(var(--space-4) * -1) 0 0;
+  margin: calc(var(--space-3) * -1) 0 0;
   font-size: var(--fs-13);
   color: var(--text-secondary);
 }
@@ -658,8 +616,7 @@
 
 /* Inclusão: campo + botão na mesma linha, separada do grupo */
 .fe-opcoes-nova {
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-subtle);
+  max-width: 560px;
 }
 
 .fe-opcoes-nova-linha {
@@ -674,23 +631,6 @@
 
 .fe-opcoes-nova-linha .btn {
   flex: none;
-}
-
-@keyframes fe-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes fe-slide {
-  from { transform: translateX(24px); opacity: 0.4; }
-  to { transform: none; opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fe-drawer-fundo,
-  .fe-drawer {
-    animation: none;
-  }
 }
 
 /* ---------- Tablet ---------- */
@@ -786,19 +726,6 @@
 
   .fe-rascunho-check {
     justify-content: flex-start;
-  }
-
-  /* Painel de opções em tela cheia */
-  .fe-drawer {
-    width: 100%;
-  }
-
-  .fe-drawer-header {
-    padding: var(--space-3) var(--space-4);
-  }
-
-  .fe-drawer-corpo {
-    padding: var(--space-5) var(--space-4) calc(var(--space-8) + env(safe-area-inset-bottom));
   }
 
   .fe-opcao-remover {

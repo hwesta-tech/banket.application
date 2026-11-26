@@ -25,7 +25,7 @@ test.describe('Formulários', () => {
     await expect(email_.locator('.switch')).toHaveCount(0);
 
     // Desativa uma pergunta padrão do fluxo social
-    await page.getByLabel('Pergunta Restrições e preferências alimentares ativa').uncheck();
+    await page.locator('[data-pergunta="b2c_restricoes"]').getByLabel('Pergunta Restrições e preferências alimentares ativa').uncheck();
 
     // Inclui uma pergunta personalizada obrigatória em Gastronomia
     const gastronomia = page.locator('[data-secao="gastronomia"]');
@@ -34,6 +34,15 @@ test.describe('Formulários', () => {
     await gastronomia.getByText('Resposta obrigatória').click();
     await gastronomia.getByRole('button', { name: 'Incluir pergunta' }).click();
     await expect(gastronomia.locator('.fe-pergunta').last()).toContainText('Tema da festa *');
+
+    // "Editar" abre a edição logo abaixo da própria pergunta
+    const tema = gastronomia.locator('.fe-pergunta', { hasText: 'Tema da festa' });
+    await tema.getByRole('button', { name: 'Editar' }).click();
+    const edicaoTema = gastronomia.locator('.fe-pergunta:has-text("Tema da festa") + .fe-edicao');
+    await expect(edicaoTema.getByLabel('Pergunta*')).toHaveValue('Tema da festa');
+    await expect(gastronomia.getByRole('button', { name: /Adicionar pergunta/ })).toBeDisabled();
+    await edicaoTema.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(edicaoTema).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Salvar' }).click();
     await expectToast(page, 'Formulário salvo.');
@@ -134,7 +143,7 @@ test.describe('Formulários', () => {
     expect(res?.status()).toBe(404);
   });
 
-  test('edita as faixas de budget no painel de opções', async ({ page }) => {
+  test('edita as faixas de budget logo abaixo da pergunta', async ({ page }) => {
     const nome = `E2E Opções ${Date.now()}`;
     await login(page);
     await page.goto('/formularios');
@@ -146,7 +155,8 @@ test.describe('Formulários', () => {
 
     const budget = page.locator('[data-pergunta="b2b_budget"]');
     await budget.getByRole('button', { name: 'Editar opções' }).click();
-    const painel = page.getByRole('dialog', { name: 'Editar opções' });
+    const painel = page.locator('[data-pergunta="b2b_budget"] + .fe-edicao');
+    await expect(painel).toBeVisible();
     const opcoes = painel.locator('.fe-opcao-texto');
     const antes = await opcoes.allInnerTexts();
     expect(antes.length).toBeGreaterThan(1);
@@ -169,8 +179,9 @@ test.describe('Formulários', () => {
     await waitForIslands(page);
 
     await budget.getByRole('button', { name: 'Editar opções' }).click();
-    await expect(page.getByRole('dialog', { name: 'Editar opções' }).locator('.fe-opcao-texto')).toHaveText(esperadas);
-    await page.keyboard.press('Escape');
+    await expect(painel.locator('.fe-opcao-texto')).toHaveText(esperadas);
+    await painel.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(painel).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Excluir' }).click();
     await confirmarModal(page);

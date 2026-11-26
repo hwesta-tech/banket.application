@@ -1,5 +1,6 @@
 // Editor de formulário de captação: dados gerais, seções (ativar/desativar) e perguntas
 // (ativar/desativar as padrão, reordenar e incluir perguntas personalizadas em cada seção).
+import { Fragment } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import {
   TIPOS_COM_OPCOES,
@@ -10,7 +11,7 @@ import {
   type TipoPergunta,
 } from '../../lib/formularios/modelo';
 import { Icon } from '../ui/Icon';
-import OpcoesDrawer from './OpcoesDrawer';
+import OpcoesEditor from './OpcoesEditor';
 import { confirmar, toast } from '../../lib/ui';
 import '../../styles/formularios.css';
 
@@ -41,11 +42,10 @@ interface Rascunho {
   ajuda: string;
 }
 
-/** Pergunta padrão com opções editáveis (faixas de budget) aberta no painel de opções */
+/** Pergunta padrão com opções editáveis (faixas de budget) em edição logo abaixo dela */
 interface EdicaoOpcoes {
   secao: string;
   id: string;
-  rotulo: string;
   opcoes: string[];
 }
 
@@ -64,6 +64,15 @@ export default function FormularioEditor({ formulario, origem }: Props) {
   const [alterado, setAlterado] = useState(false);
 
   const linkPublico = `${origem}/f/${formulario.slug}`;
+  // Uma edição por vez (pergunta personalizada, opções de uma pergunta padrão ou pergunta nova)
+  const editando = Boolean(rascunho || edicaoOpcoes);
+  const chaveEdicao = rascunho ? `r:${rascunho.secao}:${rascunho.id ?? 'nova'}` : edicaoOpcoes ? `o:${edicaoOpcoes.id}` : '';
+
+  // A edição abre onde está a pergunta: traz o bloco para a tela sem pular a página quando ele já está visível
+  useEffect(() => {
+    if (!chaveEdicao) return;
+    document.querySelector('[data-edicao]')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [chaveEdicao]);
 
   useEffect(() => {
     const aviso = (e: BeforeUnloadEvent) => {
@@ -191,6 +200,7 @@ export default function FormularioEditor({ formulario, origem }: Props) {
   async function salvar(e: Event) {
     e.preventDefault();
     if (rascunho) return toast('Conclua ou cancele a pergunta em edição antes de salvar.', 'info');
+    if (edicaoOpcoes) return toast('Aplique ou cancele as opções em edição antes de salvar.', 'info');
     const ok = await enviar('PUT', {
       nome,
       descricao,
@@ -244,6 +254,84 @@ export default function FormularioEditor({ formulario, origem }: Props) {
 
   const ativas = secoes.filter((s) => s.ativa);
   const totalPerguntas = ativas.reduce((acc, s) => acc + s.perguntas.filter((p) => p.ativa).length, 0);
+
+  // Formulário da pergunta personalizada: abre logo abaixo da pergunta editada, ou no fim da seção quando é nova
+  function formRascunho() {
+    if (!rascunho) return null;
+    return (
+      <div class="fe-rascunho">
+        <div class="fe-rascunho-grid">
+          <div class="field fe-span">
+            <label for={`fe-r-rotulo-${rascunho.secao}-${rascunho.id ?? 'nova'}`}>Pergunta<span class="obrigatorio">*</span></label>
+            <input
+              id={`fe-r-rotulo-${rascunho.secao}-${rascunho.id ?? 'nova'}`}
+              value={rascunho.rotulo}
+              onInput={(e) => setRascunho({ ...rascunho, rotulo: e.currentTarget.value })}
+              maxLength={200}
+              placeholder="Ex.: Qual o tema da festa?"
+              autoFocus
+            />
+          </div>
+          <div class="field">
+            <label for={`fe-r-tipo-${rascunho.secao}-${rascunho.id ?? 'nova'}`}>Tipo de resposta</label>
+            <select
+              id={`fe-r-tipo-${rascunho.secao}-${rascunho.id ?? 'nova'}`}
+              value={rascunho.tipo}
+              onChange={(e) => setRascunho({ ...rascunho, tipo: e.currentTarget.value as TipoPergunta })}
+            >
+              {Object.entries(TIPOS_PERGUNTA).map(([valor, rotulo]) => <option value={valor}>{rotulo}</option>)}
+            </select>
+          </div>
+          <div class="field fe-rascunho-check">
+            <label class="switch">
+              <input type="checkbox" checked={rascunho.obrigatoria} onChange={(e) => setRascunho({ ...rascunho, obrigatoria: e.currentTarget.checked })} />
+              Resposta obrigatória
+            </label>
+          </div>
+          {TIPOS_COM_OPCOES.includes(rascunho.tipo) && (
+            <div class="field fe-span">
+              <label for={`fe-r-opcoes-${rascunho.secao}-${rascunho.id ?? 'nova'}`}>Opções (uma por linha)<span class="obrigatorio">*</span></label>
+              <textarea
+                id={`fe-r-opcoes-${rascunho.secao}-${rascunho.id ?? 'nova'}`}
+                rows={4}
+                value={rascunho.opcoes}
+                onInput={(e) => setRascunho({ ...rascunho, opcoes: e.currentTarget.value })}
+                placeholder={'Opção 1\nOpção 2'}
+              />
+            </div>
+          )}
+          {!TIPOS_COM_OPCOES.includes(rascunho.tipo) && rascunho.tipo !== 'sim_nao' && rascunho.tipo !== 'data' && (
+            <div class="field">
+              <label for={`fe-r-ph-${rascunho.secao}-${rascunho.id ?? 'nova'}`}>Texto de exemplo</label>
+              <input
+                id={`fe-r-ph-${rascunho.secao}-${rascunho.id ?? 'nova'}`}
+                value={rascunho.placeholder}
+                onInput={(e) => setRascunho({ ...rascunho, placeholder: e.currentTarget.value })}
+                maxLength={200}
+                placeholder="Aparece dentro do campo vazio"
+              />
+            </div>
+          )}
+          <div class="field">
+            <label for={`fe-r-ajuda-${rascunho.secao}-${rascunho.id ?? 'nova'}`}>Texto de ajuda</label>
+            <input
+              id={`fe-r-ajuda-${rascunho.secao}-${rascunho.id ?? 'nova'}`}
+              value={rascunho.ajuda}
+              onInput={(e) => setRascunho({ ...rascunho, ajuda: e.currentTarget.value })}
+              maxLength={300}
+              placeholder="Explicação curta abaixo da pergunta"
+            />
+          </div>
+        </div>
+        <div class="fe-rascunho-acoes">
+          <button type="button" class="btn btn-secondary btn-md" onClick={() => setRascunho(null)}>Cancelar</button>
+          <button type="button" class="btn btn-primary btn-md" onClick={confirmarRascunho}>
+            {rascunho.id ? 'Atualizar pergunta' : 'Incluir pergunta'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -339,150 +427,98 @@ export default function FormularioEditor({ formulario, origem }: Props) {
 
           <ul class="fe-perguntas">
             {s.perguntas.map((p, idx) => (
-              <li class={`fe-pergunta ${p.ativa ? '' : 'fe-off'}`} key={p.id} data-pergunta={p.id}>
-                <div class="fe-ordem">
-                  <button type="button" onClick={() => mover(s.chave, idx, -1)} disabled={idx === 0} aria-label="Mover para cima"><Icon name="chevron-up" size={14} stroke={1.75} /></button>
-                  <button type="button" onClick={() => mover(s.chave, idx, 1)} disabled={idx === s.perguntas.length - 1} aria-label="Mover para baixo"><Icon name="chevron-down" size={14} stroke={1.75} /></button>
-                </div>
-                <div class="fe-pergunta-info">
-                  <span class="fe-rotulo">{p.rotulo}{p.obrigatoria && <span class="fe-req"> *</span>}</span>
-                  <span class="fe-meta">
-                    {TIPOS_PERGUNTA[p.tipo]}
-                    {p.origemOpcoes === 'ocasioes'
-                      ? p.opcoes.length > 0
-                        ? ` · ${p.opcoes.length} ${p.opcoes.length === 1 ? 'ocasião' : 'ocasiões'} (Configurações › Ocasiões)`
-                        : ' · Nenhuma ocasião marcada para este tipo em Configurações › Ocasiões: não aparece no formulário'
-                      : p.origemOpcoes === 'espacos'
+              <Fragment key={p.id}>
+                <li class={`fe-pergunta ${p.ativa ? '' : 'fe-off'} ${edicaoOpcoes?.id === p.id || rascunho?.id === p.id ? 'fe-em-edicao' : ''}`} data-pergunta={p.id}>
+                  <div class="fe-ordem">
+                    <button type="button" onClick={() => mover(s.chave, idx, -1)} disabled={idx === 0} aria-label="Mover para cima"><Icon name="chevron-up" size={14} stroke={1.75} /></button>
+                    <button type="button" onClick={() => mover(s.chave, idx, 1)} disabled={idx === s.perguntas.length - 1} aria-label="Mover para baixo"><Icon name="chevron-down" size={14} stroke={1.75} /></button>
+                  </div>
+                  <div class="fe-pergunta-info">
+                    <span class="fe-rotulo">{p.rotulo}{p.obrigatoria && <span class="fe-req"> *</span>}</span>
+                    <span class="fe-meta">
+                      {TIPOS_PERGUNTA[p.tipo]}
+                      {p.origemOpcoes === 'ocasioes'
                         ? p.opcoes.length > 0
-                          ? ` · ${p.opcoes.length} ${p.opcoes.length === 1 ? 'espaço próprio' : 'espaços próprios'} (menu Espaços)`
-                          : ' · Nenhum espaço próprio ativo no menu Espaços: não aparece no formulário'
-                        : p.endereco
-                          ? ' · CEP com busca do endereço (ViaCEP)'
-                          : p.opcoes.length > 0 && p.tipo !== 'sim_nao' ? ` · ${p.opcoes.length} opções` : ''}
-                    {!p.padrao && ' · Personalizada'}
-                    {rotuloCondicao(s, p) && ` · ${rotuloCondicao(s, p)}`}
-                  </span>
-                </div>
-                <div class="fe-pergunta-lado">
-                  {!p.padrao && (
-                    <div class="fe-acoes">
-                      <button type="button" class="row-action" onClick={() => abrirRascunho(s.chave, p)}>Editar</button>
-                      <button type="button" class="row-action danger" onClick={() => removerPergunta(s.chave, p)}>Remover</button>
-                    </div>
-                  )}
-                  {p.padrao && p.opcoesEditaveis && (
-                    <div class="fe-acoes">
-                      <button
-                        type="button"
-                        class="row-action"
-                        onClick={() => setEdicaoOpcoes({ secao: s.chave, id: p.id, rotulo: p.rotulo, opcoes: p.opcoes.map((o) => o.rotulo) })}
-                      >
-                        Editar opções
-                      </button>
-                    </div>
-                  )}
-                  {p.travada ? (
-                    <span class="fe-travada" title="Pergunta essencial para criar o cliente e o evento"><Icon name="lock" size={13} stroke={1.75} /> Obrigatória</span>
-                  ) : (
-                    <>
-                      <label class="fe-obrigatoria">
-                        <input
-                          type="checkbox"
-                          checked={p.obrigatoria}
-                          disabled={!p.ativa}
-                          onChange={(e) => alterarPergunta(s.chave, p.id, { obrigatoria: e.currentTarget.checked })}
-                        />
-                        Obrigatória
-                      </label>
-                      <label class="switch" title={p.ativa ? 'Desativar pergunta' : 'Ativar pergunta'}>
-                        <input
-                          type="checkbox"
-                          checked={p.ativa}
-                          aria-label={`Pergunta ${p.rotulo} ativa`}
-                          onChange={(e) => alterarPergunta(s.chave, p.id, { ativa: e.currentTarget.checked })}
-                        />
-                      </label>
-                    </>
-                  )}
-                </div>
-              </li>
+                          ? ` · ${p.opcoes.length} ${p.opcoes.length === 1 ? 'ocasião' : 'ocasiões'} (Configurações › Ocasiões)`
+                          : ' · Nenhuma ocasião marcada para este tipo em Configurações › Ocasiões: não aparece no formulário'
+                        : p.origemOpcoes === 'espacos'
+                          ? p.opcoes.length > 0
+                            ? ` · ${p.opcoes.length} ${p.opcoes.length === 1 ? 'espaço próprio' : 'espaços próprios'} (menu Espaços)`
+                            : ' · Nenhum espaço próprio ativo no menu Espaços: não aparece no formulário'
+                          : p.endereco
+                            ? ' · CEP com busca do endereço (ViaCEP)'
+                            : p.opcoes.length > 0 && p.tipo !== 'sim_nao' ? ` · ${p.opcoes.length} opções` : ''}
+                      {!p.padrao && ' · Personalizada'}
+                      {rotuloCondicao(s, p) && ` · ${rotuloCondicao(s, p)}`}
+                    </span>
+                  </div>
+                  <div class="fe-pergunta-lado">
+                    {!p.padrao && (
+                      <div class="fe-acoes">
+                        <button type="button" class="row-action" onClick={() => abrirRascunho(s.chave, p)} disabled={editando}>Editar</button>
+                        <button type="button" class="row-action danger" onClick={() => removerPergunta(s.chave, p)} disabled={editando}>Remover</button>
+                      </div>
+                    )}
+                    {p.padrao && p.opcoesEditaveis && (
+                      <div class="fe-acoes">
+                        <button
+                          type="button"
+                          class="row-action"
+                          onClick={() => setEdicaoOpcoes({ secao: s.chave, id: p.id, opcoes: p.opcoes.map((o) => o.rotulo) })}
+                          disabled={editando}
+                          aria-expanded={edicaoOpcoes?.id === p.id}
+                        >
+                          Editar opções
+                        </button>
+                      </div>
+                    )}
+                    {p.travada ? (
+                      <span class="fe-travada" title="Pergunta essencial para criar o cliente e o evento"><Icon name="lock" size={13} stroke={1.75} /> Obrigatória</span>
+                    ) : (
+                      <>
+                        <label class="fe-obrigatoria">
+                          <input
+                            type="checkbox"
+                            checked={p.obrigatoria}
+                            disabled={!p.ativa}
+                            onChange={(e) => alterarPergunta(s.chave, p.id, { obrigatoria: e.currentTarget.checked })}
+                          />
+                          Obrigatória
+                        </label>
+                        <label class="switch" title={p.ativa ? 'Desativar pergunta' : 'Ativar pergunta'}>
+                          <input
+                            type="checkbox"
+                            checked={p.ativa}
+                            aria-label={`Pergunta ${p.rotulo} ativa`}
+                            onChange={(e) => alterarPergunta(s.chave, p.id, { ativa: e.currentTarget.checked })}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                </li>
+                {rascunho?.secao === s.chave && rascunho.id === p.id && (
+                  <li class="fe-edicao" data-edicao>{formRascunho()}</li>
+                )}
+                {edicaoOpcoes?.secao === s.chave && edicaoOpcoes.id === p.id && (
+                  <li class="fe-edicao" data-edicao>
+                    <OpcoesEditor
+                      id={p.id}
+                      opcoes={edicaoOpcoes.opcoes}
+                      ajuda="A resposta escolhida aparece como verba estimada no evento."
+                      onAplicar={aplicarOpcoes}
+                      onFechar={() => setEdicaoOpcoes(null)}
+                    />
+                  </li>
+                )}
+              </Fragment>
             ))}
           </ul>
 
-          {rascunho?.secao === s.chave ? (
-            <div class="fe-rascunho">
-              <div class="fe-rascunho-grid">
-                <div class="field fe-span">
-                  <label for={`fe-r-rotulo-${s.chave}`}>Pergunta<span class="obrigatorio">*</span></label>
-                  <input
-                    id={`fe-r-rotulo-${s.chave}`}
-                    value={rascunho.rotulo}
-                    onInput={(e) => setRascunho({ ...rascunho, rotulo: e.currentTarget.value })}
-                    maxLength={200}
-                    placeholder="Ex.: Qual o tema da festa?"
-                    autoFocus
-                  />
-                </div>
-                <div class="field">
-                  <label for={`fe-r-tipo-${s.chave}`}>Tipo de resposta</label>
-                  <select
-                    id={`fe-r-tipo-${s.chave}`}
-                    value={rascunho.tipo}
-                    onChange={(e) => setRascunho({ ...rascunho, tipo: e.currentTarget.value as TipoPergunta })}
-                  >
-                    {Object.entries(TIPOS_PERGUNTA).map(([valor, rotulo]) => <option value={valor}>{rotulo}</option>)}
-                  </select>
-                </div>
-                <div class="field fe-rascunho-check">
-                  <label class="switch">
-                    <input type="checkbox" checked={rascunho.obrigatoria} onChange={(e) => setRascunho({ ...rascunho, obrigatoria: e.currentTarget.checked })} />
-                    Resposta obrigatória
-                  </label>
-                </div>
-                {TIPOS_COM_OPCOES.includes(rascunho.tipo) && (
-                  <div class="field fe-span">
-                    <label for={`fe-r-opcoes-${s.chave}`}>Opções (uma por linha)<span class="obrigatorio">*</span></label>
-                    <textarea
-                      id={`fe-r-opcoes-${s.chave}`}
-                      rows={4}
-                      value={rascunho.opcoes}
-                      onInput={(e) => setRascunho({ ...rascunho, opcoes: e.currentTarget.value })}
-                      placeholder={'Opção 1\nOpção 2'}
-                    />
-                  </div>
-                )}
-                {!TIPOS_COM_OPCOES.includes(rascunho.tipo) && rascunho.tipo !== 'sim_nao' && rascunho.tipo !== 'data' && (
-                  <div class="field">
-                    <label for={`fe-r-ph-${s.chave}`}>Texto de exemplo</label>
-                    <input
-                      id={`fe-r-ph-${s.chave}`}
-                      value={rascunho.placeholder}
-                      onInput={(e) => setRascunho({ ...rascunho, placeholder: e.currentTarget.value })}
-                      maxLength={200}
-                      placeholder="Aparece dentro do campo vazio"
-                    />
-                  </div>
-                )}
-                <div class="field">
-                  <label for={`fe-r-ajuda-${s.chave}`}>Texto de ajuda</label>
-                  <input
-                    id={`fe-r-ajuda-${s.chave}`}
-                    value={rascunho.ajuda}
-                    onInput={(e) => setRascunho({ ...rascunho, ajuda: e.currentTarget.value })}
-                    maxLength={300}
-                    placeholder="Explicação curta abaixo da pergunta"
-                  />
-                </div>
-              </div>
-              <div class="fe-rascunho-acoes">
-                <button type="button" class="btn btn-secondary btn-md" onClick={() => setRascunho(null)}>Cancelar</button>
-                <button type="button" class="btn btn-primary btn-md" onClick={confirmarRascunho}>
-                  {rascunho.id ? 'Atualizar pergunta' : 'Incluir pergunta'}
-                </button>
-              </div>
-            </div>
+          {rascunho?.secao === s.chave && rascunho.id === null ? (
+            <div class="fe-edicao" data-edicao>{formRascunho()}</div>
           ) : (
-            <button type="button" class="fe-adicionar" onClick={() => abrirRascunho(s.chave)} disabled={Boolean(rascunho)}>
+            <button type="button" class="fe-adicionar" onClick={() => abrirRascunho(s.chave)} disabled={editando}>
               <Icon name="circle-plus" size={15} stroke={1.75} /> Adicionar pergunta
             </button>
           )}
@@ -507,15 +543,6 @@ export default function FormularioEditor({ formulario, origem }: Props) {
         </div>
       </div>
     </form>
-    {edicaoOpcoes && (
-      <OpcoesDrawer
-        pergunta={edicaoOpcoes.rotulo}
-        opcoes={edicaoOpcoes.opcoes}
-        ajuda="A resposta escolhida aparece como verba estimada no evento."
-        onAplicar={aplicarOpcoes}
-        onFechar={() => setEdicaoOpcoes(null)}
-      />
-    )}
     </>
   );
 }

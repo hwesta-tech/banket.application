@@ -71,7 +71,7 @@ const convite = await buscarConvite(token);
         )}
 
         {!convite.contaExistente && (
-          <Checkbox id="termos" name="termos" required>
+          <Checkbox id="termos" name="termos" required mensagemObrigatorio="Para continuar, aceite os Termos de uso e a Política de privacidade.">
             Li e aceito os <a href="/termos" target="_blank" rel="noopener" class="link">Termos de uso</a> e a{' '}
             <a href="/privacidade" target="_blank" rel="noopener" class="link">Política de privacidade</a>
           </Checkbox>
