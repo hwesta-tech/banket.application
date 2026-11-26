@@ -2,6 +2,8 @@
 // Fila de reivindicações do Banket Busca (equipe Banket: e-mails em BANKET_EQUIPE_EMAILS). Cada pedido mostra quem
 // pediu e os canais reais do perfil; a equipe confere a posse fora do sistema (e-mail, WhatsApp) e decide:
 // aprovar (assumir → link de acesso no e-mail conferido; remover → o perfil sai) ou recusar com o motivo.
+// Desde 26/11/2026, com a integração do Manager configurada, os pedidos de ASSUMIR são decididos no funil Conversão do
+// Board do Manager (Ganho → link de acesso); aqui só aparecem para consulta, com o link do card.
 import AppLayout from '../../layouts/AppLayout.astro';
 import Icon from '../../components/ui/Icon.astro';
 import EstadoVazio from '../../components/ui/EstadoVazio.astro';
@@ -13,14 +15,19 @@ import {
   aprovarAssumir, aprovarRemocao, ehEquipe, listarPedidos, recusar, type StatusReivindicacao,
 } from '../../server/busca/reivindicacao';
 import { sincronizarPrivacidade } from '../../server/busca/privacidade';
+import { conversaoNoManager, sincronizarConversao } from '../../server/busca/conversao';
 
 const user = Astro.locals.user;
 if (!ehEquipe(user?.email)) return new Response('Não encontrado', { status: 404 });
+const assumirNoManager = conversaoNoManager();
 
 if (Astro.request.method === 'POST') {
   return handleFormPost(Astro, async (data) => {
     const id = String(data.id ?? '');
     const obs = typeof data.observacao === 'string' && data.observacao.trim() ? data.observacao.trim().slice(0, 1000) : null;
+    if (assumirNoManager && (data._action === 'aprovar_assumir' || data._action === 'recusar_assumir')) {
+      throw new UserError('Pedidos de assumir são decididos no Board de Conversão do Manager Hwesta.');
+    }
     switch (data._action) {
       case 'aprovar_assumir':
         await aprovarAssumir(id, String(data.email_destino ?? ''), obs, user.id);
@@ -29,6 +36,7 @@ if (Astro.request.method === 'POST') {
         await aprovarRemocao(id, obs, user.id);
         return 'Perfil removido e quem pediu foi avisado.';
       case 'recusar':
+      case 'recusar_assumir':
         await recusar(id, String(data.motivo ?? ''), user.id);
         return 'Pedido recusado e quem pediu foi avisado.';
       default:
@@ -47,6 +55,7 @@ const FILTROS: { valor: StatusReivindicacao | 'todos'; rotulo: string }[] = [
 const filtro = FILTROS.find((f) => f.valor === Astro.url.searchParams.get('status'))?.valor ?? 'pendente';
 // Reenvia ao Manager (Privacidade) remoções e desfechos que não chegaram; em segundo plano, não atrasa a página.
 void sincronizarPrivacidade();
+void sincronizarConversao(); // pedidos de assumir que não chegaram ao Board de Conversão
 const pedidos = await listarPedidos(filtro);
 const ROTULO_STATUS: Record<StatusReivindicacao, string> = { pendente: 'Pendente', aprovada: 'Link enviado', concluida: 'Concluída', recusada: 'Recusada' };
 const fone = (d: string | null) => (d ? d.replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3') : null);
@@ -56,7 +65,9 @@ const wa = (d: string) => `https://wa.me/55${d.replace(/\D/g, '')}`;
 <AppLayout title="Reivindicações do Busca" heading="Equipe / Reivindicações do Busca">
   <p class="eq-intro">
     Confira a posse pelos canais do perfil (de preferência o e-mail do domínio do buffet ou o WhatsApp) antes de aprovar.
-    Aprovar "assumir" envia o link de criação do acesso para o e-mail conferido; aprovar "remover" apaga o perfil na hora.
+    {assumirNoManager
+      ? 'Pedidos de assumir são conferidos e decididos no Board de Conversão do Manager Hwesta (Ganho envia o link de acesso). Aprovar "remover" apaga o perfil na hora.'
+      : 'Aprovar "assumir" envia o link de criação do acesso para o e-mail conferido; aprovar "remover" apaga o perfil na hora.'}
   </p>
 
   <nav class="segmented eq-filtros" aria-label="Situação">
@@ -106,7 +117,13 @@ const wa = (d: string) => `https://wa.me/55${d.replace(/\D/g, '')}`;
             <p class="eq-meta">{r.analisado_por_nome ? `Analisado por ${r.analisado_por_nome}${r.analisado_em ? ` em ${dataHora(r.analisado_em)}` : ''}` : ''}{r.email_destino ? ` · link para ${r.email_destino}` : ''}{r.observacao ? ` · ${r.observacao}` : ''}</p>
           )}
 
-          {(r.status === 'pendente' || (r.status === 'aprovada' && r.acao === 'assumir')) && (
+          {r.acao === 'assumir' && assumirNoManager && (r.status === 'pendente' || r.status === 'aprovada') ? (
+            <p class="eq-meta">
+              {r.crm_card_url
+                ? <>Decisão no Manager Hwesta: <a class="link" href={r.crm_card_url} target="_blank" rel="noopener">abrir o card no Board de Conversão</a>.</>
+                : 'Enviando ao Board de Conversão do Manager Hwesta…'}
+            </p>
+          ) : (r.status === 'pendente' || (r.status === 'aprovada' && r.acao === 'assumir')) && (
             r.reivindicavel ? (
               <div class="eq-acoes">
                 {r.acao === 'assumir' ? (
@@ -127,7 +144,7 @@ const wa = (d: string) => `https://wa.me/55${d.replace(/\D/g, '')}`;
                 )}
                 <form method="post" class="eq-form">
                   <input type="hidden" name="id" value={r.id} />
-                  <input type="hidden" name="_action" value="recusar" />
+                  <input type="hidden" name="_action" value={r.acao === 'assumir' ? 'recusar_assumir' : 'recusar'} />
                   <div class="field"><label for={`mot-${r.id}`}>Motivo da recusa (vai para quem pediu)</label><input id={`mot-${r.id}`} name="motivo" type="text" minlength="10" maxlength="1000" required /></div>
                   <button type="submit" class="btn btn-outline btn-md">Recusar</button>
                 </form>

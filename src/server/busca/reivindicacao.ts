@@ -5,6 +5,8 @@
 //   3. aprovada a posse: assumir → link de criação do acesso no e-mail conferido (aprovarAssumir → assumirPerfil);
 //      remover → o perfil sai e a base não o traz de volta (aprovarRemocao, busca_exclusoes); ou recusa (recusar).
 // Remoção também é pedido de titular (LGPD): vai para a Privacidade do Manager Hwesta com o desfecho (privacidade.ts).
+// Assumir vai para o funil Conversão do Board do Manager (conversao.ts): com a integração configurada, a decisão é lá
+// (Ganho chama /api/hwesta/v1/profile-claims/approve → aprovarAssumir); /equipe/reivindicacoes só acompanha.
 // Conexão de sistema: quem pede não tem sessão nem empresa, e as tabelas cruzam empresas (como convites.ts).
 import { systemQuery, withLeituraPublica, withSystem, type Db } from '../../lib/db';
 import { permitir } from '../../lib/rateLimit';
@@ -17,6 +19,7 @@ import { invalidar as invalidarPlano } from '../../lib/planos/gating';
 import { buscaUrl } from '../../lib/busca/url';
 import { emailLayout } from '../emails';
 import { sincronizarPrivacidade } from './privacidade';
+import { sincronizarConversao } from './conversao';
 import type { SessionUser } from '../../lib/auth';
 
 export type AcaoReivindicacao = 'assumir' | 'remover';
@@ -124,6 +127,8 @@ export async function registrarPedido(perfilRef: string, acao: AcaoReivindicacao
   );
   // Remoção = pedido de titular (LGPD): vai para a Privacidade do Manager Hwesta, em segundo plano
   if (acao === 'remover') void sincronizarPrivacidade(novo[0].id);
+  // Assumir = lead no funil Conversão do Board do Manager, onde a equipe confere e decide (conversao.ts)
+  else void sincronizarConversao(novo[0].id);
   const equipe = (process.env.BANKET_EQUIPE_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
   const oQue = acao === 'assumir' ? 'assumir o perfil' : 'remover o perfil';
   const aviso = emailLayout({
@@ -166,6 +171,8 @@ export interface ReivindicacaoNaFila {
   mensagem: string | null;
   email_destino: string | null;
   observacao: string | null;
+  /** Card no funil Conversão do Manager (pedidos de assumir) */
+  crm_card_url: string | null;
   analisado_por_nome: string | null;
   analisado_em: Date | null;
   created_at: Date;
@@ -181,7 +188,7 @@ export interface ReivindicacaoNaFila {
 export async function listarPedidos(status: StatusReivindicacao | 'todos'): Promise<ReivindicacaoNaFila[]> {
   const { rows } = await systemQuery<ReivindicacaoNaFila>(
     `SELECT r.id, r.acao, r.status, r.buffet_nome, p.slug AS perfil_slug, r.nome, r.cargo, r.email, r.telefone, r.mensagem,
-            r.email_destino, r.observacao, u.nome AS analisado_por_nome, r.analisado_em, r.created_at,
+            r.email_destino, r.observacao, r.crm_card_url, u.nome AS analisado_por_nome, r.analisado_em, r.created_at,
             coalesce(t.origem_cadastro = 'importacao' AND NOT EXISTS (SELECT 1 FROM tenant_usuarios tu WHERE tu.tenant_id = t.id), false) AS reivindicavel,
             p.email_contato AS perfil_email, p.whatsapp AS perfil_whatsapp, p.telefone AS perfil_telefone,
             p.instagram AS perfil_instagram, p.site AS perfil_site,
@@ -221,7 +228,7 @@ async function travarPedido(db: Db, id: string, acao: AcaoReivindicacao) {
  * Posse conferida pela equipe: envia ao e-mail conferido o link para criar o acesso (ou entrar, se já tiver conta) e
  * assumir a empresa. Reenviar gera um link novo e invalida o anterior.
  */
-export async function aprovarAssumir(id: string, emailDestino: string, observacao: string | null, equipeId: string): Promise<void> {
+export async function aprovarAssumir(id: string, emailDestino: string, observacao: string | null, equipeId: string | null): Promise<void> {
   const email = emailDestino.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw new UserError('Informe o e-mail conferido que vai receber o link.');
   const token = generateToken();
